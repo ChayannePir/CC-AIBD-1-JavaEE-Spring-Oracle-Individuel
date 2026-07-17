@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  # Service MongoDB
+  mongodb:
+    image: mongo:7.0
+    container_name: medical-mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongouser
+      MONGO_INITDB_ROOT_PASSWORD: mongopass
+      MONGO_INITDB_DATABASE: medical_db
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - medical-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Service Medical API
+  medical-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medical-api
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongouser:mongopass@mongodb:27017/medical_db?authSource=admin
+      SPRING_PROFILES_ACTIVE: docker
+      JWT_SECRET: mySecretKeyForJWTSigningThatIsAtLeast32CharactersLong
+      JWT_EXPIRATION: 86400000
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+      - ./documents:/app/documents
+    networks:
+      - medical-network
+    healthcheck:
+      test: curl -f http://localhost:8080/swagger-ui.html || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Service Mongo Express (GUI pour MongoDB - Optionnel)
+  mongo-express:
+    image: mongo-express:latest
+    container_name: medical-mongo-express
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: mongouser
+      ME_CONFIG_MONGODB_ADMINPASSWORD: mongopass
+      ME_CONFIG_MONGODB_URL: mongodb://mongouser:mongopass@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+    depends_on:
+      - mongodb
+    networks:
+      - medical-network
+
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_config:
+    driver: local
+
+networks:
+  medical-network:
+    driver: bridge
+
+# Instructions de démarrage:
+# 1. Docker Desktop installé et lancé
+# 2. Dans le répertoire du projet: docker-compose up -d
+# 3. L'application est accessible sur: http://localhost:8080
+# 4. Swagger UI: http://localhost:8080/swagger-ui.html
+# 5. Mongo Express: http://localhost:8081 (admin/admin)
+# 6. Arrêter: docker-compose down
+# 7. Voir les logs: docker-compose logs -f medical-api
+
