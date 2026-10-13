@@ -13,6 +13,7 @@ import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -23,24 +24,10 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import javax.crypto.SecretKey;
 import java.util.Date;
 
-/**
- * Implémentation de l'interface AuthService.
- * Gère l'authentification avec JWT tokens.
- *
- * Utilise:
- * - JWT pour générer et valider les tokens
- * - AuthenticationManager pour authentifier les utilisateurs
- * - UserDetailsService pour charger les utilisateurs
- * - PasswordEncoder pour valider les mots de passe
- *
- * Configuration:
- * - JWT_SECRET: clé secrète pour signer les tokens (à configurer dans application.properties)
- * - JWT_EXPIRATION: durée de validité du token en millisecondes
- */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AuthServiceImpl implements AuthService, UserDetailsService {
 
@@ -48,35 +35,25 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
     private final AuthenticationManager authenticationManager;
     private final PasswordEncoder passwordEncoder;
 
-    /**
-     * Clé secrète JWT injectée depuis la configuration
-     * Doit être définie dans application.properties
-     * Exemple: jwt.secret=mySecretKeyForJWTSigningThatIsAtLeast32CharactersLong
-     */
+    public AuthServiceImpl(UserRepository userRepository,
+                          @Lazy AuthenticationManager authenticationManager,
+                          PasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
+        this.authenticationManager = authenticationManager;
+        this.passwordEncoder = passwordEncoder;
+    }
+
     @Value("${jwt.secret:mySecretKeyForJWTSigningThatIsAtLeast32CharactersLong}")
     private String jwtSecret;
 
-    /**
-     * Durée d'expiration du token en millisecondes
-     * Par défaut: 86400000 (24 heures)
-     */
     @Value("${jwt.expiration:86400000}")
     private long jwtExpiration;
 
-    /**
-     * Effectue la connexion d'un utilisateur.
-     * Valide les identifiants et retourne un token JWT.
-     *
-     * @param loginRequest contient username et password
-     * @return LoginResponseDTO avec le token JWT
-     * @throws BadCredentialsException si les identifiants sont incorrects
-     */
     @Override
     public LoginResponseDTO login(LoginRequestDTO loginRequest) {
         log.info("Tentative de connexion pour l'utilisateur: {}", loginRequest.getUsername());
 
         try {
-            // Authentifier l'utilisateur avec AuthenticationManager
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
                             loginRequest.getUsername(),
@@ -84,17 +61,13 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
                     )
             );
 
-            // Récupérer l'utilisateur authentifié
             User user = userRepository.findByUsername(loginRequest.getUsername())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Utilisateur non trouvé"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Utilisateur non trouvé"));
 
-            // Générer le token JWT
             String token = generateToken(user);
 
             log.info("Connexion réussie pour l'utilisateur: {}", loginRequest.getUsername());
 
-            // Retourner la réponse avec le token
             return LoginResponseDTO.builder()
                     .token(token)
                     .username(user.getUsername())
@@ -104,53 +77,36 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
                     .build();
 
         } catch (BadCredentialsException e) {
-            log.warn("Tentative de connexion échouée pour l'utilisateur: {} - Identifiants incorrects",
+            log.warn("Tentative de connexion echouee pour l'utilisateur: {} - Identifiants incorrects",
                     loginRequest.getUsername());
             throw new BadCredentialsException("Identifiants incorrects");
         }
     }
 
-    /**
-     * Génère un token JWT pour un utilisateur.
-     * Le token contient:
-     * - Le username comme subject
-     * - Les rôles de l'utilisateur comme claim customisé
-     * - Timestamp de création (iat)
-     * - Timestamp d'expiration (exp)
-     *
-     * @param user l'utilisateur pour lequel générer le token
-     * @return le token JWT généré
-     */
     private String generateToken(User user) {
-        log.debug("Génération d'un token JWT pour l'utilisateur: {}", user.getUsername());
+        log.debug("Generation d'un token JWT pour l'utilisateur: {}", user.getUsername());
 
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpiration);
+        SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes());
 
         return Jwts.builder()
-                .setSubject(user.getUsername())  // Le username comme subject
-                .claim("roles", user.getRoles())  // Ajouter les rôles comme claim
-                .setIssuedAt(now)                  // Date de création
-                .setExpiration(expiryDate)         // Date d'expiration
-                .signWith(Keys.hmacShaKeyFor(jwtSecret.getBytes()), SignatureAlgorithm.HS256)  // Signer avec HS256
+                .subject(user.getUsername())
+                .claim("roles", user.getRoles())
+                .issuedAt(now)
+                .expiration(expiryDate)
+                .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
 
-    /**
-     * Extrait le username du token JWT.
-     * Désérialise le token et récupère le subject (username).
-     *
-     * @param token le token JWT
-     * @return le username
-     */
     @Override
     public String extractUsername(String token) {
         try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(Keys.hmacShaKeyFor(jwtSecret.getBytes()))
+            Claims claims = Jwts.parser()
+                    .verifyWith(Keys.hmacShaKeyFor(jwtSecret.getBytes()))
                     .build()
-                    .parseClaimsJws(token)
-                    .getBody();
+                    .parseSignedClaims(token)
+                    .getPayload();
 
             return claims.getSubject();
 
@@ -160,21 +116,15 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
         }
     }
 
-    /**
-     * Valide si un token JWT est valide et non expiré.
-     *
-     * @param token le token JWT
-     * @return true si le token est valide, false sinon
-     */
     @Override
     public boolean validateToken(String token) {
         try {
-            Jwts.parserBuilder()
-                    .setSigningKey(Keys.hmacShaKeyFor(jwtSecret.getBytes()))
+            Jwts.parser()
+                    .verifyWith(Keys.hmacShaKeyFor(jwtSecret.getBytes()))
                     .build()
-                    .parseClaimsJws(token);
+                    .parseSignedClaims(token);
 
-            log.debug("Token validé avec succès");
+            log.debug("Token valide avec succes");
             return true;
 
         } catch (Exception e) {
@@ -183,22 +133,12 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
         }
     }
 
-    /**
-     * Charge les détails d'un utilisateur par son username.
-     * Implémentation de UserDetailsService pour Spring Security.
-     *
-     * @param username le nom d'utilisateur
-     * @return les détails de l'utilisateur
-     * @throws UsernameNotFoundException si l'utilisateur n'existe pas
-     */
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        log.debug("Chargement des détails de l'utilisateur: {}", username);
+        log.debug("Chargement des details de l'utilisateur: {}", username);
 
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException(
-                        "Utilisateur non trouvé: " + username));
+                        "Utilisateur non trouve: " + username));
     }
 }
-
-
