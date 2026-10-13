@@ -1,143 +1,248 @@
-# Projet JEE, Spring, Oracle - API REST de Gestion Médicale
+# Medical API - Spring Boot 3 + MongoDB
 
-Ce projet est une API REST développée avec Spring Boot 3, Spring Framework 6, Spring Data JPA et Spring Security. Elle permet de gérer des informations médicales telles que les patients, les médecins, les consultations et les prescriptions de médicaments. L'API est conçue pour se connecter à une base de données Oracle XE ou MariaDB, avec une configuration facile.
+API REST pour la gestion des patients, médecins, consultations, prescriptions médicales et documents associés.
 
-## Spécifications Fonctionnelles
+Cette application a été validée avec Spring Boot 3.2.1, Java 17, Spring Security, MongoDB, JWT et Swagger/OpenAPI.
 
-L'API offre les fonctionnalités suivantes :
+## Objectif
 
-*   **Authentification** : Connexion via login/mot de passe et récupération d'un jeton JWT.
-*   **Gestion des Patients** :
-    *   Récupérer l'ensemble des patients avec pagination et recherche optionnelle (nom ou numéro de sécurité sociale).
-*   **Gestion des Médecins** :
-    *   Lister avec pagination l'ensemble des médecins, recherche optionnelle (nom ou matricule).
-*   **Gestion des Consultations** :
-    *   Lister avec pagination l'ensemble des consultations d'un patient donné.
-    *   Détailler les médicaments prescrits dans une consultation.
-    *   Ajouter, modifier ou supprimer une consultation programmée (à l'avenir).
-    *   Modifier la prescription de médicaments d'une consultation.
-    *   Possibilité de joindre un document (fichier) à la consultation (fonctionnalité à implémenter).
+Projet de service REST médical proposant :
+- authentification login/password avec JWT
+- gestion des patients, médecins, médicaments et consultations
+- pagination et recherche par critères
+- gestion des prescriptions de médicaments
+- ajout de documents à une consultation
+- sécurité Spring Security
+- documentation Swagger
+- tests Spring Boot
 
-## Technologies Utilisées
+## Stack technique
 
-*   **Spring Boot 3.x**
-*   **Spring Framework 6.x**
-*   **Spring Web** (pour les API REST)
-*   **Spring Data JPA** (pour l'accès aux données)
-*   **Spring Security** (pour l'authentification et l'autorisation JWT)
-*   **JWT (JSON Web Tokens)** (pour la sécurité stateless)
-*   **Lombok** (pour réduire le code boilerplate)
-*   **Bases de données supportées** : Oracle XE, MariaDB (configurable), H2 (pour le développement/tests)
-*   **Maven** (gestion de projet)
-*   **Springdoc OpenAPI (Swagger UI)** (pour la documentation de l'API)
+- Java 17
+- Spring Boot 3.2.1
+- Spring Web
+- Spring Data MongoDB
+- Spring Security
+- JWT (jjwt 0.12.3)
+- SpringDoc OpenAPI 2.3.0
+- Maven
+- JUnit 5 / Spring Boot Test
 
-## Modèle Conceptuel de Données (MCD)
+## Architecture
 
-Le projet est basé sur le MCD suivant, traduit en entités JPA :
+Le projet suit une architecture en couches :
+- controller : endpoints REST
+- service : logique métier
+- repository : accès MongoDB
+- entity : entités du domaine
+- dto : objets de transfert
+- exception : gestion centralisée des erreurs
+- security : JWT + Spring Security
+- config : configuration Spring
 
-*   **MEDICAMENT** (Code, Libellé)
-*   **MEDECIN** (Matricule, NomMED)
-*   **PATIENT** (N°SS, NomPAT)
-*   **CONSULTATION** (Numéro, Date)
-    *   Association "Donne" entre `MEDECIN` (0,n) et `CONSULTATION` (1,1)
-    *   Association "Assiste" entre `PATIENT` (1,n) et `CONSULTATION` (1,1)
-*   **PRESCRIPTION** (NB prises) - Association entre `MEDICAMENT` (0,n) et `CONSULTATION` (0,n)
+## Prérequis
 
-## Comment démarrer le projet
+Avant de lancer le projet, vérifier :
+- Java 17+
+- Maven 3.8+
+- MongoDB démarré localement sur localhost:27017
 
-Suivez ces étapes pour configurer et exécuter le projet localement.
+Vérification rapide :
 
-### Prérequis
-
-Assurez-vous d'avoir les éléments suivants installés :
-
-*   **Java Development Kit (JDK) 17 ou plus récent**
-*   **Apache Maven 3.x**
-*   **Un IDE** (IntelliJ IDEA, Eclipse, VS Code avec extensions Java)
-*   **Une base de données** (Oracle XE ou MariaDB) si vous ne souhaitez pas utiliser H2 en mémoire.
-
-### 1. Cloner le dépôt (ou ouvrir le projet existant)
-
-Si vous avez déjà le projet, ouvrez-le dans votre IDE. Sinon, clonez le dépôt Git :
-
-```bash
-git clone <URL_DU_DEPOT>
-cd CC-AIBD-1-JavaEE-Spring-Oracle-Individuel
+```powershell
+java -version
+mvn -version
 ```
 
-### 2. Configuration de la base de données
+## Installation
 
-Le fichier `src/main/resources/application.properties` contient les configurations pour différentes bases de données.
+```powershell
+cd C:\Users\Admin Stagiaire\Documents\CC-AIBD-1-JavaEE-Spring-Oracle-Individuel
+mvn clean install
+```
 
-*   **H2 (Base de données en mémoire - par défaut pour le développement)** :
-    Les lignes H2 sont généralement décommentées par défaut pour faciliter le démarrage.
-    ```properties
-    spring.h2.console.enabled=true
-    spring.h2.console.path=/h2-console
-    spring.datasource.url=jdbc:h2:mem:mydb
-    spring.datasource.driverClassName=org.h2.Driver
-    spring.datasource.username=sa
-    spring.datasource.password=password
-    spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
-    ```
-    Vous pouvez accéder à la console H2 via `http://localhost:8080/h2-console` après le démarrage de l'application.
+## Configuration
 
-*   **Oracle XE ou MariaDB** :
-    Décommentez la section correspondant à votre base de données et mettez à jour les informations de connexion (URL, nom d'utilisateur, mot de passe).
-    **Exemple pour Oracle XE :**
-    ```properties
-    # spring.datasource.url=jdbc:oracle:thin:@localhost:1521:XE
-    # spring.datasource.username=your_oracle_username
-    # spring.datasource.password=your_oracle_password
-    # spring.datasource.driver-class-name=oracle.jdbc.OracleDriver
-    # spring.jpa.database-platform=org.hibernate.dialect.OracleDialect
-    # spring.jpa.hibernate.ddl-auto=update
-    ```
-    **Exemple pour MariaDB :**
-    ```properties
-    # spring.datasource.url=jdbc:mariadb://localhost:3306/your_database_name
-    # spring.datasource.username=your_mariadb_username
-    # spring.datasource.password=your_mariadb_password
-    # spring.datasource.driver-class-name=org.mariadb.jdbc.Driver
-    # spring.jpa.database-platform=org.hibernate.dialect.MariaDBDialect
-    # spring.jpa.hibernate.ddl-auto=update
-    ```
-    Assurez-vous que `spring.jpa.hibernate.ddl-auto=update` est activé pour que JPA crée ou mette à jour automatiquement le schéma de la base de données au démarrage.
+Fichier principal :
 
-### 3. Exécuter l'application
+```text
+src/main/resources/application.properties
+```
 
-Vous pouvez exécuter l'application de plusieurs manières :
+Configuration MongoDB utilisée par défaut :
 
-*   **Depuis votre IDE** :
-    Ouvrez la classe `ProjetjeeApplication.java` (située dans `src/main/java/com/example/projetjee/`) et exécutez la méthode `main`.
+```properties
+spring.data.mongodb.uri=mongodb://localhost:27017/medical_db
+```
 
-*   **Avec Maven** :
-    Ouvrez un terminal dans le répertoire racine du projet et exécutez :
-    ```bash
-    mvn spring-boot:run
-    ```
+Configuration JWT :
 
-*   **En tant que JAR exécutable** :
-    1.  Construisez le projet :
-        ```bash
-        mvn clean install
-        ```
-    2.  Exécutez le fichier JAR généré :
-        ```bash
-        java -jar target/projetjee-0.0.1-SNAPSHOT.jar
-        ```
+```properties
+jwt.secret=mySecretKeyForJWTSigningThatIsAtLeast32CharactersLongAndStronger
+jwt.expiration=86400000
+```
 
-L'application démarrera sur `http://localhost:8080` (ou le port configuré dans `application.properties`).
+## Lancement
 
-### 4. Accéder à la documentation de l'API (Swagger UI)
+Lancer l’application :
 
-Une fois l'application démarrée, vous pouvez accéder à l'interface Swagger UI pour explorer les endpoints de l'API :
+```powershell
+mvn spring-boot:run
+```
 
-*   **URL Swagger UI** : `http://localhost:8080/swagger-ui.html`
-*   **URL des définitions OpenAPI** : `http://localhost:8080/v3/api-docs`
+L’API sera disponible sur :
 
-### 5. Authentification
+```text
+http://localhost:8080
+```
 
-L'API utilise JWT pour l'authentification. Vous devrez d'abord vous connecter à l'endpoint d'authentification (à implémenter) pour obtenir un jeton JWT, puis inclure ce jeton dans l'en-tête `Authorization` de vos requêtes (format `Bearer <votre_jeton>`).
+La documentation Swagger est disponible sur :
 
----
+```text
+http://localhost:8080/swagger-ui.html
+```
+
+## Authentification
+
+Endpoint de connexion :
+
+```http
+POST /api/auth/login
+```
+
+Exemple de body :
+
+```json
+{
+  "username": "doctor_001",
+  "password": "doctor123"
+}
+```
+
+Exemple de réponse :
+
+```json
+{
+  "token": "...",
+  "username": "doctor_001",
+  "email": "doctor@medical.com",
+  "roles": "ROLE_DOCTOR",
+  "type": "Bearer"
+}
+```
+
+Puis utiliser le header :
+
+```http
+Authorization: Bearer <token>
+```
+
+## Endpoints principaux
+
+### Authentification
+- POST /api/auth/login
+
+### Patients
+- GET /api/patients
+- GET /api/patients/search
+- GET /api/patients/{id}
+- POST /api/patients
+- PUT /api/patients/{id}
+- DELETE /api/patients/{id}
+
+### Médecins
+- GET /api/medecins
+- GET /api/medecins/search
+- GET /api/medecins/{id}
+- POST /api/medecins
+- PUT /api/medecins/{id}
+- DELETE /api/medecins/{id}
+
+### Consultations
+- GET /api/consultations
+- GET /api/consultations/{id}
+- GET /api/consultations/patient/{patientId}
+- POST /api/consultations
+- PUT /api/consultations/{id}
+- DELETE /api/consultations/{id}
+- PATCH /api/consultations/{id}/validate
+- POST /api/consultations/{consultationId}/prescriptions
+- DELETE /api/consultations/{consultationId}/prescriptions/{medicamentId}
+- PUT /api/consultations/{consultationId}/prescriptions/{medicamentId}
+- POST /api/consultations/{id}/documents
+- GET /api/consultations/{id}/medicaments
+
+### Médicaments
+- GET /api/medicaments
+- GET /api/medicaments/search
+- GET /api/medicaments/{id}
+- POST /api/medicaments
+- PUT /api/medicaments/{id}
+- DELETE /api/medicaments/{id}
+
+## Sécurité
+
+La configuration Spring Security est active avec JWT.
+
+- CSRF désactivé pour l’API REST
+- sessions sans état (STATELESS)
+- CORS configuré pour localhost
+- endpoints publics : login + swagger
+- endpoints protégés : tout le reste
+
+## Tests
+
+Exécuter tous les tests :
+
+```powershell
+mvn test
+```
+
+Exécuter un test ciblé :
+
+```powershell
+mvn test -Dtest=AuthControllerTest
+```
+
+## Commandes utiles
+
+```powershell
+mvn clean
+mvn compile
+mvn test
+mvn package
+mvn spring-boot:run
+```
+
+## MongoDB
+
+Assurez-vous que MongoDB est démarré :
+
+```powershell
+mongod
+```
+
+Puis vérifier :
+
+```powershell
+mongosh "mongodb://localhost:27017/medical_db"
+```
+
+## Vérification de démarrage
+
+L’application est considérée comme démarrée correctement lorsqu’on voit dans la console :
+
+```text
+Tomcat started on port 8080
+Started MedicalApiApplication
+```
+
+## Remarques
+
+- Le projet est configuré pour MongoDB.
+- Il est prêt pour une démonstration locale et une présentation orale.
+- Le cycle Spring Security / JWT a été corrigé pour éviter l’erreur de dépendance circulaire.
+
+## État du projet
+
+Le projet est fonctionnel et compilable sous Java 17 avec Spring Boot 3.2.x et MongoDB local.
